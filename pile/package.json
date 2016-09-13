@@ -1,0 +1,15 @@
+{
+  "name": "pile",
+  "version": "0.0.0",
+  "description": "Function which piles up events",
+  "main": "index.js",
+  "dependencies": {
+    "aws-sdk": "~2.6.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "BSD-2-Clause"
+}
