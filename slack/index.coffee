@@ -30,6 +30,7 @@ class Poll
     }
     new Promise (ok, fail) =>
       sqs.receiveMessage params, (err, data) =>
+        console.log "Omg! received messages #{err}: #{JSON.stringify(data)}"
         if err
           return fail(err)
         else
@@ -50,8 +51,10 @@ class Poll
   process: (ok, fail) ->
     @fetch()
       .then (msg_list) =>
+        console.log "got to processing messages list: #{(msg_list or []).length}"
         if msg_list?
           Promise.all msg_list.map (msg) =>
+            console.log "emit: #{msg.Body}"
             body = JSON.parse(msg.Body)
             @emitter.emit(body).then @delete(msg)
         else
@@ -66,6 +69,7 @@ class Slack
     @channel = channel
 
   say: (what) ->
+    console.log "Saying #{what}"
     data = {
       channel: @channel,
       text: what,
@@ -75,9 +79,10 @@ class Slack
 
     new Promise (ok, fail) =>
       opts = {
-        form: { payload: querystring.stringify(data) }
-        } 
+        json: data
+        }
       request.post Config.slack_bot, opts, (err, status, body) =>
+        console.log "HTTP #{status}; opts: #{opts}; body: #{body}"
         if err
           fail err
         else
@@ -85,15 +90,14 @@ class Slack
 
   petition_flagged: (petition) ->
     link = (url) -> "<a href=\"#{url}\">#{url}</a>"
-    @say "Kampania `#{petition.title}' została oznaczona do moderacji #{link(petition.url)}."
+    @say "Kampania `#{petition.title}' została oznaczona do moderacji #{petition.url}."
 
   petition_launched: (petition) ->
     link = (url) -> "<a href=\"#{url}\">#{url}</a>"
-    @say "Nowa kampania `#{petition.title}' #{link(petition.url)}."
+    @say "Nowa kampania `#{petition.title}' #{petition.url}."
     
 
   emit: (message) ->
-    console.log "messages: #{JSON.stringify(message)}"
     switch message.type
       when "petition.launched" then @petition_launched(message.data)
       when "petition.flagged" then @petition_flagged(message.data)
