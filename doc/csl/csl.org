@@ -1,0 +1,57 @@
+
+* Czy kupiony?
+* CNAME?
+* styles - co można ?
+* facebook APP
+
+
+* API
+** @akcjobot
+*** blast_email.created
+*** event.created, event.updated
+*** local_chapter.organiser_request.created
+*** petition.flagged
+*** petition.launched
+petition.launched.ham ?
+petition.launched.requires_moderation
+petition.reactivated
+petition.updated
+petition.updated.requires_moderation
+
+*** forum.message.requires_moderation
+
+** Civi
+*** member.deleted
+*** petition.launched
+
+*** signature.created
+*** signature.deleted
+*** signature.confirmed
+*** unsubscribe.created
+
+
+
+*** @akcjobot
+https://api.slack.com/bot-users
+https://akcjademokracja.slack.com/services/67673549521?updated=1
+
+**** api key
+xoxb-67658865252-R1o8xGsNa7qYT11UOSjLAQGN
+
+
+
+{
+    "access_token": "xoxb-67658865252-R1o8xGsNa7qYT11UOSjLAQGN",
+    "scope": "incoming-webhook,commands,bot",
+    "team_name": "Akcja Demokracja",
+    "team_id": "akcjademokracja",
+    "incoming_webhook": {
+        "url": "https://hooks.slack.com/TXXXXX/BXXXXX/XXXXXXXXXX",
+        "channel": "#channel-it-will-post-to",
+        "configuration_url": "https://teamname.slack.com/services/BXXXXX"
+    },
+    "bot":{
+        "bot_user_id":"UTTTTTTTTTTR",
+        "bot_access_token":"xoxb-XXXXXXXXXXXX-TTTTTTTTTTTTTT"
+    }
+}
