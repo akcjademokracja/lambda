@@ -40,6 +40,7 @@
     Poll.prototype.fetch = function() {
       var params,
         _this = this;
+      console.log("Poll queue " + this.queue);
       params = {
         QueueUrl: this.queue,
         MaxNumberOfMessages: 10,
@@ -78,8 +79,8 @@
     Poll.prototype.process = function(ok, fail) {
       var _this = this;
       return this.fetch().then(function(msg_list) {
-        console.log("got to processing messages list: " + (msg_list || []).length);
         if (msg_list != null) {
+          console.log("Processing " + msg_list.length + " events");
           return Promise.all(msg_list.map(function(msg) {
             var body;
             console.log("emit: " + msg.Body);
@@ -87,6 +88,7 @@
             return _this.emitter.emit(body).then(_this["delete"](msg));
           }));
         } else {
+          console.log("no messages to process");
           return [];
         }
       })["catch"](function(error) {
@@ -132,27 +134,49 @@
     };
 
     Slack.prototype.petition_flagged = function(petition) {
-      var link;
-      link = function(url) {
-        return "<a href=\"" + url + "\">" + url + "</a>";
-      };
       return this.say("Kampania `" + petition.title + "' została oznaczona do moderacji " + petition.url + ".");
     };
 
     Slack.prototype.petition_launched = function(petition) {
-      var link;
-      link = function(url) {
-        return "<a href=\"" + url + "\">" + url + "</a>";
-      };
       return this.say("Nowa kampania `" + petition.title + "' " + petition.url + ".");
+    };
+
+    Slack.prototype.petition_updated = function(petition) {
+      return this.say("Zmiana w kampanii `" + petition.title + "' " + petition.url + ".");
+    };
+
+    Slack.prototype.blast_created = function(blast) {
+      return this.say("Nowy blast: `" + blast.subject + "' od " + blast.from_name + " <" + blast.from_address + ">");
+    };
+
+    Slack.prototype.event_created = function(event) {
+      return this.say("Nowe wydarzenie: `" + event.title + "' " + event.url);
+    };
+
+    Slack.prototype.event_updated = function(event) {
+      return this.say("Zmiana wydarzenia: `" + event.title + "' " + event.url);
     };
 
     Slack.prototype.emit = function(message) {
       switch (message.type) {
         case "petition.launched":
           return this.petition_launched(message.data);
+        case "petition.launched.ham":
+          return this.petition_launched(message.data);
+        case "petition.launched.requires_moderation":
+          return this.petition_launched(message.data);
         case "petition.flagged":
           return this.petition_flagged(message.data);
+        case "blast_email.created":
+          return this.blast_created(message.data);
+        case "event.created":
+          return this.event_created(message.data);
+        case "event.updated":
+          return this.event_updated(message.data);
+        case "petition.updated":
+          return this.petition_updated(message.data);
+        case "petition.updated.requires_moderation":
+          return this.petition_updated(message.data);
         default:
           throw "slack emitter does not support type " + message.type;
       }

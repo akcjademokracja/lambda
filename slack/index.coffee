@@ -23,6 +23,7 @@ class Poll
     @emitter = emitter
 
   fetch:  ->
+    console.log "Poll queue #{@queue}"
     params = {
       QueueUrl: @queue,
       MaxNumberOfMessages: 10,
@@ -51,13 +52,14 @@ class Poll
   process: (ok, fail) ->
     @fetch()
       .then (msg_list) =>
-        console.log "got to processing messages list: #{(msg_list or []).length}"
         if msg_list?
+          console.log "Processing #{msg_list.length} events"
           Promise.all msg_list.map (msg) =>
             console.log "emit: #{msg.Body}"
             body = JSON.parse(msg.Body)
             @emitter.emit(body).then @delete(msg)
         else
+          console.log "no messages to process"
           []
       .catch (error) =>
         fail(error)
@@ -89,18 +91,35 @@ class Slack
           ok body
 
   petition_flagged: (petition) ->
-    link = (url) -> "<a href=\"#{url}\">#{url}</a>"
+    #link = (url) -> "<a href=\"#{url}\">#{url}</a>"
     @say "Kampania `#{petition.title}' została oznaczona do moderacji #{petition.url}."
 
   petition_launched: (petition) ->
-    link = (url) -> "<a href=\"#{url}\">#{url}</a>"
     @say "Nowa kampania `#{petition.title}' #{petition.url}."
+
+  petition_updated: (petition) ->
+    @say "Zmiana w kampanii `#{petition.title}' #{petition.url}."
+
+  blast_created: (blast) ->
+    @say "Nowy blast: `#{blast.subject}' od #{blast.from_name} <#{blast.from_address}>"
     
+  event_created: (event) ->
+    @say "Nowe wydarzenie: `#{event.title}' #{event.url}"
+
+  event_updated: (event) ->
+    @say "Zmiana wydarzenia: `#{event.title}' #{event.url}"
 
   emit: (message) ->
     switch message.type
       when "petition.launched" then @petition_launched(message.data)
+      when "petition.launched.ham" then @petition_launched(message.data)
+      when "petition.launched.requires_moderation" then @petition_launched(message.data)
       when "petition.flagged" then @petition_flagged(message.data)
+      when "blast_email.created" then @blast_created(message.data)
+      when "event.created" then @event_created(message.data)
+      when "event.updated" then @event_updated(message.data)
+      when "petition.updated" then @petition_updated(message.data)
+      when "petition.updated.requires_moderation" then @petition_updated(message.data)
       else throw "slack emitter does not support type #{message.type}"
   
 slack = new Slack Config.slack_bot, '#naszademokracja'
