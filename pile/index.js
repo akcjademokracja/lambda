@@ -16,7 +16,7 @@
     civi_queue: process.env['CIVI_QUEUE'],
     slack_queue: process.env['SLACK_QUEUE'],
     token: process.env['TOKEN'],
-    civi_types: ["member.deleted", "petition.launched", "signature.created", "signature.deleted", "signature.confirmed", "unsubscribe.created"],
+    civi_types: ["member.deleted", "petition.launched", "signature.created", "signature.deleted", "signature.confirmed", "unsubscribe.created", "attendee.created", "attendee.updated"],
     slack_types: ["blast_email.created", "event.created", "event.updated", "local_chapter.organiser_request.created", "petition.flagged", "petition.launched", "petition.launched.ham", "petition.launched.requires_moderation", "petition.reactivated", "petition.updated", "petition.updated.requires_moderation"]
   };
 

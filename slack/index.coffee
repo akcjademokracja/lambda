@@ -60,13 +60,13 @@ class Poll
       .then (msg_list) =>
         if msg_list?
           console.log "Processing #{msg_list.length} events"
-          Promise.all msg_list.map (msg) =>
+          return Promise.all msg_list.map (msg) =>
             console.log "emit: #{msg.Body}"
             body = JSON.parse(msg.Body)
             @emitter.emit(body).then @delete(msg)
         else
           console.log "no messages to process"
-          []
+          return []
       .catch (error) =>
         fail(error)
         

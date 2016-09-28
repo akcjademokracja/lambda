@@ -13,7 +13,9 @@ Config = {
     "signature.created",
     "signature.deleted",
     "signature.confirmed",
-    "unsubscribe.created"
+    "unsubscribe.created",
+    "attendee.created",
+    "attendee.updated"
     ],
   slack_types: [
     "blast_email.created",
