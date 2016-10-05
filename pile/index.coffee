@@ -10,6 +10,9 @@ Config = {
   civi_types: [
     "member.deleted",
     "petition.launched",
+    "petition.updated",
+    "event.created",
+    "event.updated",
     "signature.created",
     "signature.deleted",
     "signature.confirmed",
@@ -45,7 +48,6 @@ class Pile
     console.log("SQS error is #{err}, data is #{d(data)}")
     
   pile: (obj, callback) ->
-    console.log "Going to pile #{d(obj)}"
     sqs.sendMessage({
       MessageBody: JSON.stringify(obj),
       QueueUrl: @url
@@ -53,14 +55,11 @@ class Pile
 
   event: (event, context, callback) ->
     console.log("event: #{d(event)}")
-
-    if event.type in @pile_types
-      
+    if event.type in @pile_types      
       @pile(event, callback)
       callback null, true
     else
       callback null, false
-
 
 
 civi = new Pile(Config.civi_queue, Config.civi_types)
@@ -68,4 +67,4 @@ slack = new Pile(Config.slack_queue, Config.slack_types)
 
 exports.event = (args...) ->
   civi.event(args...)
-  slack.event(args...)
+  slack.event(args...) 

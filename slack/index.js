@@ -32,7 +32,11 @@
     slack_bot: process.env['SLACK_BOT'],
     civi_site_key: process.env['CIVI_SITE_KEY'],
     civi_user_key: process.env['CIVI_USER_KEY'],
-    civi_endpoint: process.env['CIVI_API']
+    civi_endpoint: process.env['CIVI_API'],
+    civi_events: {
+      'ND Petition': 70,
+      'ND Event': 69
+    }
   };
 
   Poll = (function() {
@@ -201,7 +205,7 @@
     Civi.prototype.api = function(entity, action, params) {
       var _this = this;
       return new Promise(function(ok, fail) {
-        var opts;
+        var handle_response, opts;
         params.sequential = 1;
         opts = {
           qs: {
@@ -212,60 +216,99 @@
             json: JSON.stringify(params)
           }
         };
-        return request.get(_this.endpoint, opts, function(err, status, body) {
+        console.log("[Civi] => " + entity + "." + action + "(" + opts.qs.json + ")");
+        handle_response = function(err, status, body) {
           var data;
           if (err) {
             return fail(err);
           } else {
-            console.log("CIVI API: " + body);
+            console.log("[Civi] <= " + body);
             data = JSON.parse(body);
             if (data.is_error > 0) {
               return fail("Civi API call error body:" + body);
             } else {
-              return ok(data);
+              return ok(data.values);
             }
           }
-        });
+        };
+        if (action === 'get') {
+          return request.get(_this.endpoint, opts, handle_response);
+        } else {
+          return request.post(_this.endpoint, opts, handle_response);
+        }
       });
     };
 
-    Civi.prototype.petition_external_id = function(petition) {
-      return "nd:csl:" + Crypto.enc.Base64.stringify(Crypto.MD5("petition:" + petition.slug));
+    Civi.prototype.petition_external_id = function(petition, type) {
+      if (type == null) {
+        type = "petition";
+      }
+      return "nd:csl:" + Crypto.enc.Base64.stringify(Crypto.MD5("" + type + ":" + petition.slug));
     };
 
-    Civi.prototype.civi_campaign_slug = function(petition) {
-      return "ND_" + petition.slug;
+    Civi.prototype.civi_campaign_slug = function(petition, type) {
+      var code;
+      if (type == null) {
+        type = "petition";
+      }
+      code = {
+        petition: "P",
+        event: "E"
+      };
+      return "ND" + code[type] + "-" + petition.slug;
     };
 
-    Civi.prototype.civi_campaign_title = function(petition) {
-      return "ND " + petition.title;
+    Civi.prototype.civi_campaign_title = function(petition, type) {
+      var title;
+      if (type == null) {
+        type = "petition";
+      }
+      title = {
+        petition: "Petition",
+        event: "Event"
+      };
+      return "ND " + title[type] + " " + petition.title;
     };
 
-    Civi.prototype.civi_campaign_hash = function(petition) {
+    Civi.prototype.civi_campaign_hash = function(petition, type) {
+      if (type == null) {
+        type = "petition";
+      }
       return {
-        external_identifier: this.petition_external_id(petition),
-        name: this.civi_campaign_slug(petition),
-        title: this.civi_campaign_title(petition)
+        name: this.civi_campaign_slug(petition, type),
+        title: this.civi_campaign_title(petition, type),
+        description: "" + petition.url
       };
     };
 
-    Civi.prototype.create_or_update_petition = function(petition) {
-      var external_id,
+    Civi.prototype.get_campaign = function(what, type) {
+      var external_id;
+      external_id = this.petition_external_id(what, type);
+      return this.api('Campaign', 'get', {
+        external_identifier: external_id
+      });
+    };
+
+    Civi.prototype.create_or_update_petition = function(message) {
+      var entity_type, external_id, petition,
         _this = this;
-      external_id = this.petition_external_id(petition);
+      petition = message.data;
+      entity_type = message.type.split('.')[0];
+      external_id = this.petition_external_id(petition, entity_type);
       return this.api('Campaign', 'get', {
         external_identifier: external_id
       }).then(function(civi_campaigns) {
         var cc, cc_data;
-        if (civi_campaigns.values.length === 0) {
+        if (civi_campaigns.length === 0) {
           console.log("no campaign with this external id");
-          cc_data = _this.civi_campaign_hash(petition);
+          cc_data = _this.civi_campaign_hash(petition, entity_type);
+          cc_data.external_identifier = external_id;
           return _this.api('Campaign', 'create', cc_data);
         } else {
           cc = civi_campaigns[0];
           console.log("there is a campaign: " + cc.title + " (" + cc.id + ")");
-          if (cc.title !== _this.civi_campaign_slug(petition)) {
-            cc_data = _this.civi_campaign_hash(petition);
+          if (cc.title !== _this.civi_campaign_slug(petition, entity_type)) {
+            cc_data = _this.civi_campaign_hash(petition, entity_type);
             cc_data.id = cc.id;
             return _this.api('Campaign', 'create', cc_data);
           } else {
@@ -275,11 +318,172 @@
       });
     };
 
+    Civi.prototype.create_or_update_member = function(member) {
+      var got_contact,
+        _this = this;
+      console.log("UPSERT MEM: " + (JSON.stringify(member)));
+      got_contact = this.api('Contact', 'get', {
+        email: member.email
+      }).then(function(contacts) {
+        var contact;
+        if (contacts.length > 0) {
+          console.log("Found " + contacts.length + " members for " + member.email);
+          contact = contacts[0];
+          console.log("Will update " + contact.first_name + " " + contact.last_name + " (" + contact.postal_code + ")");
+          return contact;
+        } else {
+          return _this.api('Contact', 'create', {
+            contact_type: 'Individual',
+            first_name: member.first_name,
+            last_name: member.last_name
+          }).then(function(new_contacts) {
+            var new_contact;
+            new_contact = new_contacts[0];
+            console.log("new member: " + (JSON.stringify(new_contact)));
+            return new_contact;
+          });
+        }
+      });
+      return got_contact.then(function(contact) {
+        var address_hash, create_address, create_email, email_hash;
+        console.log("Contact's email_id=" + contact.email_id + " address_id=" + contact.address_id);
+        email_hash = {
+          email: member.email
+        };
+        if (contact.email_id != null) {
+          email_hash.id = contact.email_id;
+          email_hash.contact_id = contact.id;
+        } else {
+          email_hash.contact_id = contact.id;
+        }
+        create_email = _this.api('Email', 'create', email_hash);
+        address_hash = {
+          postal_code: member.postcode,
+          country_id: member.country,
+          location_type_id: "Główna"
+        };
+        if (contact.address_id != null) {
+          address_hash.id = contact.address_id;
+        } else {
+          address_hash.contact_id = contact.id;
+        }
+        create_address = _this.api('Address', 'create', address_hash);
+        return Promise.all([create_email, create_address]).then(function(done) {
+          console.log("Creating email/addr: " + (JSON.stringify(done)));
+          return contact;
+        });
+      });
+    };
+
+    Civi.prototype.member_activity = function(member, activity_hash) {
+      var duplicates_present,
+        _this = this;
+      return duplicates_present = this.api('ActivityContact', 'get', {
+        'activity_id.activity_date_time': activity_hash.activity_date_time,
+        'contact_id.id': member.id,
+        'activity_id.campaign_id': activity_hash.campaign_id,
+        'activity_id.activity_type_id': activity_hash.activity_type_id
+      }).then(function(duplicates) {
+        if (duplicates.length > 0) {
+          console.log("There are " + duplicates.length + " duplicates for this activity. skipping.");
+          return true;
+        } else {
+          return _this.api('Activity', 'create', {
+            "campaign_id": activity_hash.campaign_id,
+            "api.ActivityContact.create": {
+              "contact_id": member.id
+            },
+            "activity_type_id": activity_hash.activity_type_id,
+            "activity_date_time": activity_hash.activity_date_time,
+            "source_contact_id": member.id,
+            "subject": activity_hash.campaign_subject,
+            "location": "naszademokracja.pl:" + activity_hash.campaign_type
+          }).then(function(activities) {
+            return activities[0];
+          });
+        }
+      });
+    };
+
+    Civi.prototype.civi_datetime = function(d) {
+      var date;
+      date = new Date(d);
+      return date.toJSON();
+    };
+
+    Civi.prototype.add_attendee = function(message) {
+      var get_campaign, get_member,
+        _this = this;
+      get_member = this.create_or_update_member(message.data);
+      get_campaign = this.get_campaign(message.data.event, 'event');
+      return Promise.all([get_member, get_campaign]).then(function(_arg) {
+        var activity_hash, campaigns, member;
+        member = _arg[0], campaigns = _arg[1];
+        activity_hash = {
+          activity_type_id: 'NDEvent',
+          activity_date_time: _this.civi_datetime(message.data.created_at),
+          campaign_id: campaigns[0].id,
+          campaign_subject: _this.civi_campaign_slug(message.data.event, 'event'),
+          campaign_type: 'event'
+        };
+        return _this.member_activity(member, activity_hash);
+      });
+    };
+
+    Civi.prototype.add_signature = function(message) {
+      var get_campaign, get_member,
+        _this = this;
+      get_member = this.create_or_update_member(message.data);
+      get_campaign = this.get_campaign(message.data.petition, 'petition');
+      return Promise.all([get_member, get_campaign]).then(function(_arg) {
+        var activity_hash, campaigns, member;
+        member = _arg[0], campaigns = _arg[1];
+        activity_hash = {
+          activity_type_id: 'NDPetition',
+          activity_date_time: _this.civi_datetime(message.data.last_signed_at),
+          campaign_id: campaigns[0].id,
+          campaign_subject: _this.civi_campaign_slug(message.data.petition, 'petition'),
+          campaign_type: 'petition'
+        };
+        return _this.member_activity(member, activity_hash);
+      });
+    };
+
+    Civi.prototype.unsubscribe = function(message) {
+      var get_member,
+        _this = this;
+      get_member = this.create_or_update_member(message.data);
+      return get_member.then(function(contact) {
+        console.log("Opting Out " + contact.first_name + " " + contact.last_name + " <" + contact.email + ">");
+        return _this.api('Contact', 'create', {
+          id: contact.id,
+          contact_type: 'Individual',
+          is_opt_out: 1
+        });
+      });
+    };
+
     Civi.prototype.emit = function(message) {
       console.log("Civi: message type: " + message.type);
       switch (message.type) {
         case "petition.launched":
-          return this.create_or_update_petition(message.data);
+          return this.create_or_update_petition(message);
+        case "petition.updated":
+          return this.create_or_update_petition(message);
+        case "event.created":
+          return this.create_or_update_petition(message);
+        case "event.updated":
+          return this.create_or_update_petition(message);
+        case "attendee.created":
+          return this.add_attendee(message);
+        case "attendee.updated":
+          return this.add_attendee(message);
+        case "signature.created":
+          return this.add_signature(message);
+        case "signature.confirmed":
+          return true;
+        case "unsubscribe.created":
+          return this.unsubscribe(message);
         default:
           throw "slack emitter does not support type " + message.type;
       }
@@ -299,6 +503,11 @@
 
   exports.event = function(event, context, callback) {
     var fail, ok;
+    if (event !== {}) {
+      console.log("~~~ TESTING MODE ~~~");
+      civi.emit(event);
+      return;
+    }
     ok = function(x) {
       return callback(null);
     };
