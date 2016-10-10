@@ -69,7 +69,8 @@ class Poll
           console.log "no messages to process"
           return []
       .catch (error) =>
-        fail(error)
+        console.error "Error processing msgs #{error}"
+        ok error
         
 
 class Slack
@@ -339,23 +340,13 @@ slack_poll = new Poll Config.slack_queue, slack
 civi = new Civi Config.civi_endpoint, Config.civi_site_key, Config.civi_user_key
 civi_poll = new Poll Config.civi_queue, civi
 
-# exports.event = (event, context, callback) ->
-#   civi.api('Contact', '', { id: -13529123 })
-#     .then (data) ->
-#       console.log "mamy to! #{JSON.stringify(data)}"
-#       callback null
-#     .catch (err) ->
-#       console.log "błąd #{err}"
-#       callback err.error_message
-
 
 exports.event = (event, context, callback) ->
-  if event != {}
-    console.log "~~~ TESTING MODE ~~~"
-    civi.emit event
-    return
+  # if event != {}
+  #   console.log "~~~ TESTING MODE ~~~"
+  #   civi.emit event
+  #   return
   
   ok = (x) -> callback(null)
   fail = (err) -> callback(err)
-  #poll.process ok, fail
-  civi_poll.process ok, fail
+  Promise.all([slack_poll.process(), civi_poll.process()]).then(ok).catch(fail)

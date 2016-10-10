@@ -102,7 +102,8 @@
           return [];
         }
       })["catch"](function(error) {
-        return fail(error);
+        console.error("Error processing msgs " + error);
+        return ok(error);
       });
     };
 
@@ -503,18 +504,13 @@
 
   exports.event = function(event, context, callback) {
     var fail, ok;
-    if (event !== {}) {
-      console.log("~~~ TESTING MODE ~~~");
-      civi.emit(event);
-      return;
-    }
     ok = function(x) {
       return callback(null);
     };
     fail = function(err) {
       return callback(err);
     };
-    return civi_poll.process(ok, fail);
+    return Promise.all([slack_poll.process(), civi_poll.process()]).then(ok)["catch"](fail);
   };
 
 }).call(this);

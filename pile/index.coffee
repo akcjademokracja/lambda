@@ -1,3 +1,5 @@
+bluebird = require 'bluebird'
+Promise = bluebird.Promise
 
 https = require 'https'
 AWS = require 'aws-sdk'
@@ -6,6 +8,7 @@ sqs = new AWS.SQS({region: 'us-west-1'})
 Config = {
   civi_queue: process.env['CIVI_QUEUE'],
   slack_queue: process.env['SLACK_QUEUE'],
+  debug_queue: process.env['DEBUG_QUEUE'],
   token: process.env['TOKEN'],
   civi_types: [
     "member.deleted",
@@ -48,23 +51,31 @@ class Pile
     console.log("SQS error is #{err}, data is #{d(data)}")
     
   pile: (obj, callback) ->
-    sqs.sendMessage({
-      MessageBody: JSON.stringify(obj),
-      QueueUrl: @url
-      }, (err,data) => @result(err,data))
+    new Promise (ok, fail) =>
+      sqs.sendMessage({
+        MessageBody: JSON.stringify(obj),
+        QueueUrl: @url
+        },
+        (err,data) =>
+          if err
+            console.error "SQS error piling msg: #{err}"
+            fail err
+          else
+            ok "OK for #{@url}")
 
-  event: (event, context, callback) ->
+  event: (event) ->
     console.log("event: #{d(event)}")
     if event.type in @pile_types      
-      @pile(event, callback)
-      callback null, true
+      @pile(event)
     else
-      callback null, false
+      return false
 
 
 civi = new Pile(Config.civi_queue, Config.civi_types)
 slack = new Pile(Config.slack_queue, Config.slack_types)
+debug = new Pile(Config.debug_queue, Config.civi_types + Config.slack_types)
 
-exports.event = (args...) ->
-  civi.event(args...)
-  slack.event(args...) 
+exports.event = (event, context, callback) ->
+  Promise.all([civi.event(event), slack.event(event), debug.event(event)])
+  .then((x)=>console.info(x); callback(null))
+  .catch((errors)=>callback("Pile error "+JSON.stringify(errors)))
