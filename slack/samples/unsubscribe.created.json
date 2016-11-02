@@ -1,0 +1,11 @@
+{
+  "type": "unsubscribe.created",
+  "data": {
+    "id": 3,
+    "email": "jenny@example.com",
+    "unsubscribe_organisation": true,
+    "unsubscribable_type": null,
+    "created_at": "2015-08-03T13:38:49-04:00"
+  },
+  "jid": "030ee43a4fa9788e084d9cfc"
+}

@@ -1,0 +1,9 @@
+{
+  "type": "event.created",
+  "data": {
+    "slug": "petition-hand-in",
+    "title": "Petition Hand In",
+    "url": "https://demo.controlshiftlabs.com/events/petition-hand-in"
+  },
+  "jid": "030ee43a4fa9788e084d9cfc"
+}

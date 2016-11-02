@@ -24,15 +24,16 @@ Config = {
 }
 
 class Poll
-  constructor: (queue_url, emitter) ->
+  constructor: (queue_url, emitter, number=10) ->
     @queue = queue_url
     @emitter = emitter
+    @maxNumberOfMessages = 10
 
   fetch:  ->
     console.log "Poll queue #{@queue}"
     params = {
       QueueUrl: @queue,
-      MaxNumberOfMessages: 10,
+      MaxNumberOfMessages: @maxNumberOfMessages,
       VisibilityTimeout: 15
     }
     new Promise (ok, fail) =>
@@ -61,6 +62,7 @@ class Poll
       .then (msg_list) =>
         if msg_list?
           console.log "Processing #{msg_list.length} events"
+          # make this sequential XXXX
           return Promise.all msg_list.map (msg) =>
             console.log "emit: #{msg.Body}"
             body = JSON.parse(msg.Body)
@@ -69,7 +71,7 @@ class Poll
           console.log "no messages to process"
           return []
       .catch (error) =>
-        console.error "Error processing msgs #{error}"
+        console.error "Error processing msgs #{error}: #{error.stack}"
         ok error
         
 
@@ -126,7 +128,7 @@ class Slack
       when "event.updated" then @event_updated(message.data)
       when "petition.updated" then @petition_updated(message.data)
       when "petition.updated.requires_moderation" then @petition_updated(message.data)
-      else throw "slack emitter does not support type #{message.type}"
+      else throw Error("slack emitter does not support type #{message.type}")
 
 
 class Civi
@@ -229,20 +231,26 @@ class Civi
             })
             .then (new_contacts) =>
               new_contact = new_contacts[0]
-              console.log "new member: #{JSON.stringify(new_contact)}"
+              console.log "new member (id=#{new_contact.id}): #{JSON.stringify(new_contact)}"
               new_contact
 
     # proactively update the postcode and email
     got_contact.then (contact) =>
       console.log "Contact's email_id=#{contact.email_id} address_id=#{contact.address_id}"
-      email_hash = {, email: member.email }
+      email_hash = {contact_id: contact.id, email: member.email}
       if contact.email_id?
-        email_hash.id = contact.email_id
-        email_hash.contact_id = contact.id
-      else
-        email_hash.contact_id = contact.id
+        email_hash.id = contact.email_id 
         
       create_email = @api('Email', 'create', email_hash)
+
+      if member.phone_number
+        phone_hash = {phone: member.phone_number, phone_type_id: "Mobile", is_primary: 1, contact_id: contact.id}
+        if contact.phone_id
+          phone_hash.id = contact.phone_id
+          
+        create_phone = @api('Phone', 'create', phone_hash)
+      else
+        create_phone = true
 
       address_hash = {postal_code: member.postcode, country_id: member.country, location_type_id: "Główna"}
       if contact.address_id?
@@ -252,7 +260,7 @@ class Civi
       
       create_address = @api('Address', 'create', address_hash)
       
-      return Promise.all([create_email, create_address])
+      return Promise.all([create_email, create_address, create_phone])
         .then (done) =>
           console.log "Creating email/addr: #{JSON.stringify(done)}"
           contact # let's return the new contact anyway
@@ -331,21 +339,23 @@ class Civi
       when "signature.confirmed" then true #ignore, for now.
       #when "signature.deleted" then false  # TODO
       when "unsubscribe.created" then @unsubscribe(message)
-      else throw "slack emitter does not support type #{message.type}"
+      else
+        console.log "civi emitter does not support type #{JSON.stringify(message)}"
+        throw Error("civi emitter does not support message #{message.type}")
 
                                 
 slack = new Slack Config.slack_bot, '#naszademokracja'
-slack_poll = new Poll Config.slack_queue, slack
+slack_poll = new Poll Config.slack_queue, slack, 10
 
 civi = new Civi Config.civi_endpoint, Config.civi_site_key, Config.civi_user_key
-civi_poll = new Poll Config.civi_queue, civi
+civi_poll = new Poll Config.civi_queue, civi, 1
 
 
 exports.event = (event, context, callback) ->
-  # if event != {}
-  #   console.log "~~~ TESTING MODE ~~~"
-  #   civi.emit event
-  #   return
+  if typeof event == 'object' and Object.keys(event).length > 0
+    console.log "~~~ TESTING MODE ~~~"
+    civi.emit event
+    return
   
   ok = (x) -> callback(null)
   fail = (err) -> callback(err)

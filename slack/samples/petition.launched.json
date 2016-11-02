@@ -1,0 +1,45 @@
+{
+  "type": "petition.launched",
+  "data": {
+    "slug": "don-t-destroy-our-park",
+    "title": "Don't destroy our park!",
+    "url": "https://demo.controlshiftlabs.com/petitions/don-t-destroy-our-park",
+    "image_url": "https://d34smfggpfnvat.cloudfront.net/petitions/images/788/hero/imag0945.jpg?1438621934",
+    "additional_image_sizes_url": [
+      {
+        "style": "form",
+        "url": "https://d34smfggpfnvat.cloudfront.net/petitions/images/788/form/imag0945.jpg?1438621934"
+      },
+      {
+        "style": "large",
+        "url": "https://d34smfggpfnvat.cloudfront.net/petitions/images/788/large/imag0945.jpg?1438621934"
+      },
+      {
+        "style": "open_graph",
+        "url": "https://d34smfggpfnvat.cloudfront.net/petitions/images/788/open_graph/imag0945.jpg?1438621934"
+      },
+      {
+        "style": "original",
+        "url": "https://d34smfggpfnvat.cloudfront.net/petitions/images/788/original/imag0945.jpg?1438621934"
+      }
+    ],
+    "who": "Anytown City Council",
+    "what": "The park on Main Street is an important community space.  Don't approve the proposal to sell it to office building developers.",
+    "goal": 100,
+    "signature_count": 0,
+    "creator": {
+      "id": 1,
+      "email": "agra.user.adm@gmail.com",
+      "full_name": "Tyshawn Morissette",
+      "first_name": "Tyshawn",
+      "last_name": "Morissette",
+      "phone_number": "12345-1",
+      "postcode": "34058-2356"
+    },
+    "locale": "en-US",
+    "created_at": "2015-08-03T13:11:02-04:00",
+    "updated_at": "2015-08-03T13:12:15-04:00",
+    "why": "Studies have shown that green space is important to child development and community well-being."
+  },
+  "jid": "9fccc1957d7d7ebc93fb0f05"
+}

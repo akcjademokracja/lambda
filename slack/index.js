@@ -41,9 +41,13 @@
 
   Poll = (function() {
 
-    function Poll(queue_url, emitter) {
+    function Poll(queue_url, emitter, number) {
+      if (number == null) {
+        number = 10;
+      }
       this.queue = queue_url;
       this.emitter = emitter;
+      this.maxNumberOfMessages = 10;
     }
 
     Poll.prototype.fetch = function() {
@@ -52,7 +56,7 @@
       console.log("Poll queue " + this.queue);
       params = {
         QueueUrl: this.queue,
-        MaxNumberOfMessages: 10,
+        MaxNumberOfMessages: this.maxNumberOfMessages,
         VisibilityTimeout: 15
       };
       return new Promise(function(ok, fail) {
@@ -102,7 +106,7 @@
           return [];
         }
       })["catch"](function(error) {
-        console.error("Error processing msgs " + error);
+        console.error("Error processing msgs " + error + ": " + error.stack);
         return ok(error);
       });
     };
@@ -187,7 +191,7 @@
         case "petition.updated.requires_moderation":
           return this.petition_updated(message.data);
         default:
-          throw "slack emitter does not support type " + message.type;
+          throw Error("slack emitter does not support type " + message.type);
       }
     };
 
@@ -340,24 +344,36 @@
           }).then(function(new_contacts) {
             var new_contact;
             new_contact = new_contacts[0];
-            console.log("new member: " + (JSON.stringify(new_contact)));
+            console.log("new member (id=" + new_contact.id + "): " + (JSON.stringify(new_contact)));
             return new_contact;
           });
         }
       });
       return got_contact.then(function(contact) {
-        var address_hash, create_address, create_email, email_hash;
+        var address_hash, create_address, create_email, create_phone, email_hash, phone_hash;
         console.log("Contact's email_id=" + contact.email_id + " address_id=" + contact.address_id);
         email_hash = {
+          contact_id: contact.id,
           email: member.email
         };
         if (contact.email_id != null) {
           email_hash.id = contact.email_id;
-          email_hash.contact_id = contact.id;
-        } else {
-          email_hash.contact_id = contact.id;
         }
         create_email = _this.api('Email', 'create', email_hash);
+        if (member.phone_number) {
+          phone_hash = {
+            phone: member.phone_number,
+            phone_type_id: "Mobile",
+            is_primary: 1,
+            contact_id: contact.id
+          };
+          if (contact.phone_id) {
+            phone_hash.id = contact.phone_id;
+          }
+          create_phone = _this.api('Phone', 'create', phone_hash);
+        } else {
+          create_phone = true;
+        }
         address_hash = {
           postal_code: member.postcode,
           country_id: member.country,
@@ -369,7 +385,7 @@
           address_hash.contact_id = contact.id;
         }
         create_address = _this.api('Address', 'create', address_hash);
-        return Promise.all([create_email, create_address]).then(function(done) {
+        return Promise.all([create_email, create_address, create_phone]).then(function(done) {
           console.log("Creating email/addr: " + (JSON.stringify(done)));
           return contact;
         });
@@ -486,7 +502,8 @@
         case "unsubscribe.created":
           return this.unsubscribe(message);
         default:
-          throw "slack emitter does not support type " + message.type;
+          console.log("civi emitter does not support type " + (JSON.stringify(message)));
+          throw Error("civi emitter does not support message " + message.type);
       }
     };
 
@@ -496,14 +513,19 @@
 
   slack = new Slack(Config.slack_bot, '#naszademokracja');
 
-  slack_poll = new Poll(Config.slack_queue, slack);
+  slack_poll = new Poll(Config.slack_queue, slack, 10);
 
   civi = new Civi(Config.civi_endpoint, Config.civi_site_key, Config.civi_user_key);
 
-  civi_poll = new Poll(Config.civi_queue, civi);
+  civi_poll = new Poll(Config.civi_queue, civi, 1);
 
   exports.event = function(event, context, callback) {
     var fail, ok;
+    if (typeof event === 'object' && Object.keys(event).length > 0) {
+      console.log("~~~ TESTING MODE ~~~");
+      civi.emit(event);
+      return;
+    }
     ok = function(x) {
       return callback(null);
     };
