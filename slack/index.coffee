@@ -57,16 +57,24 @@ class Poll
         else
           ok null
 
+  process_list: (msg_list) ->
+    [first, rest... ] = msg_list
+    unless first?
+      return
+    body = JSON.parse(first.Body)
+    @emitter.emit(body).then () =>
+      @delete(first)
+      console.log "Done and deleted, rest: #{rest}"
+      @process_list(rest)
+    
+
   process: (ok, fail) ->
     @fetch()
       .then (msg_list) =>
         if msg_list?
           console.log "Processing #{msg_list.length} events"
-          # make this sequential XXXX
-          return Promise.all msg_list.map (msg) =>
-            console.log "emit: #{msg.Body}"
-            body = JSON.parse(msg.Body)
-            @emitter.emit(body).then @delete(msg)
+          return @process_list msg_list
+
         else
           console.log "no messages to process"
           return []
@@ -149,12 +157,12 @@ class Civi
           json: JSON.stringify(params)
           }
       }
-      console.log "[Civi] => #{entity}.#{action}(#{opts.qs.json})"
+      console.log "[C!] #{entity}.#{action}(#{opts.qs.json})"
       handle_response = (err, status, body) =>
         if err
           fail err
         else
-          console.log "[Civi] <= #{body}"
+          console.log "[C@] #{entity}.#{action}(#{opts.qs.json})---#{body}"
           data = JSON.parse body
           if data.is_error > 0
             fail "Civi API call error body:#{body}"
@@ -191,7 +199,13 @@ class Civi
 
   get_campaign: (what, type) ->
     external_id = @petition_external_id(what, type)
-    return @api('Campaign', 'get', {external_identifier: external_id})
+    campaigns = @api('Campaign', 'get', {external_identifier: external_id})
+    campaigns.then (cl) =>
+      if cl.length>0
+        return cl
+      else
+        throw Error("No #{type} with external_id #{external_id} [#{JSON.stringify(what)}]. Missed creation?")
+      
 
   create_or_update_petition: (message) ->
     petition = message.data 
@@ -253,7 +267,7 @@ class Civi
         create_phone = true
 
       address_hash = {postal_code: member.postcode, country_id: member.country, location_type_id: "Główna"}
-      if contact.address_id?
+      if contact.address_id
         address_hash.id = contact.address_id
       else
         address_hash.contact_id = contact.id
@@ -283,6 +297,7 @@ class Civi
             "activity_date_time": activity_hash.activity_date_time,
             "source_contact_id": member.id,
             "subject": activity_hash.campaign_subject,
+            "status_id": "Completed",
             "location": "naszademokracja.pl:#{activity_hash.campaign_type}"
             }).then (activities) => activities[0]
 
