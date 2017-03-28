@@ -62,19 +62,20 @@ class Poll
     unless first?
       return
     body = JSON.parse(first.Body)
-    @emitter.emit(body).then () =>
-      @delete(first)
-      console.log "Done and deleted, rest: #{rest}"
-      @process_list(rest)
-    
-
+    emitting = @emitter.emit(body)
+    if emitting?
+      emitting.then () =>
+        @delete(first)
+        console.log "Done and deleted, rest: #{rest}"
+    @process_list(rest)
+      
+          
   process: (ok, fail) ->
     @fetch()
       .then (msg_list) =>
         if msg_list?
           console.log "Processing #{msg_list.length} events"
           return @process_list msg_list
-
         else
           console.log "no messages to process"
           return []
@@ -126,10 +127,11 @@ class Slack
     @say "Zmiana wydarzenia: _#{event.title}_ #{event.url}"
 
   emit: (message) ->
+    console.log "Slack: message type: #{message.type}"
     switch message.type
       when "petition.launched" then @petition_launched(message.data)
-      when "petition.launched.ham" then @petition_launched(message.data)
-      when "petition.launched.requires_moderation" then @petition_launched(message.data)
+      when "petition.launched.ham" then null #@petition_launched(message.data)
+      when "petition.launched.requires_moderation" then null # @petition_launched(message.data)
       when "petition.flagged" then @petition_flagged(message.data)
       when "blast_email.created" then @blast_created(message.data)
       when "event.created" then @event_created(message.data)
@@ -352,7 +354,9 @@ class Civi
       when "attendee.updated" then @add_attendee(message)
       when "signature.created" then @add_signature(message)
       when "signature.confirmed" then true #ignore, for now.
-      #when "signature.deleted" then false  # TODO
+      when "signature.deleted" then @unsubscribe(message) # XXX something else?
+      when "member.deleted" then @unsubscribe(message) # XXX should really delete
+
       when "unsubscribe.created" then @unsubscribe(message)
       else
         console.log "civi emitter does not support type #{JSON.stringify(message)}"

@@ -92,18 +92,21 @@
     };
 
     Poll.prototype.process_list = function(msg_list) {
-      var body, first, rest,
+      var body, emitting, first, rest,
         _this = this;
       first = msg_list[0], rest = 2 <= msg_list.length ? __slice.call(msg_list, 1) : [];
       if (first == null) {
         return;
       }
       body = JSON.parse(first.Body);
-      return this.emitter.emit(body).then(function() {
-        _this["delete"](first);
-        console.log("Done and deleted, rest: " + rest);
-        return _this.process_list(rest);
-      });
+      emitting = this.emitter.emit(body);
+      if (emitting != null) {
+        emitting.then(function() {
+          _this["delete"](first);
+          return console.log("Done and deleted, rest: " + rest);
+        });
+      }
+      return this.process_list(rest);
     };
 
     Poll.prototype.process = function(ok, fail) {
@@ -182,13 +185,14 @@
     };
 
     Slack.prototype.emit = function(message) {
+      console.log("Slack: message type: " + message.type);
       switch (message.type) {
         case "petition.launched":
           return this.petition_launched(message.data);
         case "petition.launched.ham":
-          return this.petition_launched(message.data);
+          return null;
         case "petition.launched.requires_moderation":
-          return this.petition_launched(message.data);
+          return null;
         case "petition.flagged":
           return this.petition_flagged(message.data);
         case "blast_email.created":
@@ -519,6 +523,10 @@
           return this.add_signature(message);
         case "signature.confirmed":
           return true;
+        case "signature.deleted":
+          return this.unsubscribe(message);
+        case "member.deleted":
+          return this.unsubscribe(message);
         case "unsubscribe.created":
           return this.unsubscribe(message);
         default:
